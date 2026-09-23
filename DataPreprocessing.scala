@@ -1,5 +1,8 @@
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
+import org.apache.spark.ml.feature.VectorAssembler
+import org.apache.spark.ml.stat.Correlation
+import org.apache.spark.ml.linalg.Matrix
 
 object DataPreprocessing {
 
@@ -65,7 +68,7 @@ object DataPreprocessing {
     println("Total rows: " + totalRows)
     println("Distinct rows: " + distinctRows)
     println("Duplicate rows: " + duplicateRows)
-    val cleanedDf = df.dropDuplicates()
+    val cleanedDf = df.dropDuplicates().cache()
 
 println("======================================")
 println("After Removing Duplicates")
@@ -128,16 +131,193 @@ println("Columns after cleaning: " + cleanedDf.columns.length)
         println(c + ": " + outlierCount + " outliers")
       }
     }
+    // ======================================
+    // Data Reduction - Step 1: Constant Features
+    // ======================================
+
+    println("======================================")
+    println("Data Reduction - Constant Features")
+    println("======================================")
+
+    // Exclude the target column from feature reduction
+    val featureColumns = cleanedDf.columns.filter(_ != "Attack_type")
+
+    // Identify features that contain only one unique value
+   val constantColumns = featureColumns.filter { c =>
+  cleanedDf
+    .select(col(s"`$c`"))
+    .distinct()
+    .limit(2)
+    .count() <= 1
+}
+
+    println("Number of features before reduction: " + featureColumns.length)
+    println("Number of constant features found: " + constantColumns.length)
+
+    if (constantColumns.nonEmpty) {
+      println("Constant features:")
+      constantColumns.foreach(println)
+    } else {
+      println("No constant features found.")
+    }
+	 // Remove constant features
+    val reducedDf = cleanedDf.drop(constantColumns: _*)
+
+    println("======================================")
+    println("After Constant Feature Removal")
+    println("======================================")
+
+    println("Rows after reduction: " + reducedDf.count())
+    println("Columns after reduction: " + reducedDf.columns.length)
+
+    println("Removed features:")
+    constantColumns.foreach(println)
+
+// ======================================
+// Data Reduction - Step 2: Correlation-Based Feature Selection
+// ======================================
+
+println("======================================")
+println("Data Reduction - Correlation Analysis")
+println("======================================")
+
+// Select numeric features only
+val correlationColumns = reducedDf.columns.filter { c =>
+  reducedDf.schema(c).dataType.isInstanceOf[
+    org.apache.spark.sql.types.NumericType
+  ]
+}
+
+println(
+  "Numeric features used for correlation: " +
+  correlationColumns.length
+)
+
+// Rename columns temporarily because VectorAssembler
+// interprets dots in column names as nested fields
+val safeCorrelationColumns =
+  correlationColumns.indices.map(i => s"corr_$i").toArray
+
+val safeNumericDf = reducedDf.select(
+  correlationColumns
+    .zip(safeCorrelationColumns)
+    .map { case (original, safe) =>
+      col(s"`$original`").cast("double").alias(safe)
+    }: _*
+)
+
+// Assemble numeric features into one vector
+val correlationAssembler = new VectorAssembler()
+  .setInputCols(safeCorrelationColumns)
+  .setOutputCol("features")
+
+val correlationVectorDf =
+  correlationAssembler
+    .transform(safeNumericDf)
+    .select("features")
+
+// Calculate Pearson correlation matrix
+val correlationMatrix =
+  Correlation
+    .corr(correlationVectorDf, "features", "pearson")
+    .head()
+    .getAs[Matrix](0)
+
+// Detect highly correlated feature pairs
+val correlationThreshold = 0.95
+
+val highlyCorrelatedPairs =
+  for {
+    i <- correlationColumns.indices
+    j <- (i + 1) until correlationColumns.length
+    corr = correlationMatrix(i, j)
+    if !corr.isNaN &&
+       math.abs(corr) >= correlationThreshold
+  } yield (
+    correlationColumns(i),
+    correlationColumns(j),
+    corr
+  )
+
+println(
+  "Number of highly correlated pairs: " +
+  highlyCorrelatedPairs.length
+)
+
+highlyCorrelatedPairs
+  .sortBy(x => -math.abs(x._3))
+  .foreach { case (feature1, feature2, corr) =>
+    println(
+      feature1 + " <-> " +
+      feature2 + " : " +
+      f"$corr%.4f"
+    )
+  }
+
+// Features selected for removal after inspecting highly correlated groups.
+// A threshold of |r| >= 0.95 was used to identify candidate pairs.
+// Only the strongest redundant relationships (approximately |r| >= 0.99)
+// were selected for removal to avoid excessive information loss.
+val correlationDropColumns = Array(
+  "flow_iat.tot",
+  "fwd_iat.tot",
+  "idle.tot",
+  "fwd_pkts_per_sec",
+  "bwd_pkts_per_sec",
+  "bwd_bulk_packets",
+  "fwd_iat.max",
+  "idle.max",
+  "idle.avg",
+  "bwd_data_pkts_tot",
+  "bwd_pkts_payload.tot"
+)
+
+// Remove redundant correlated features
+val finalReducedDf =
+  reducedDf.drop(correlationDropColumns: _*)
+
+println("======================================")
+println("After Correlation-Based Reduction")
+println("======================================")
+
+println(
+  "Rows after correlation reduction: " +
+  finalReducedDf.count()
+)
+
+println(
+  "Columns after correlation reduction: " +
+  finalReducedDf.columns.length
+)
+
+println(
+  "Correlation-based features removed: " +
+  correlationDropColumns.length
+)
+
+println("Removed correlated features:")
+correlationDropColumns.foreach(println)
+
+println(
+  "Final predictive features: " +
+  finalReducedDf.columns.count(_ != "Attack_type")
+)
 
     // Standardization using Z-score
     println("======================================")
     println("Standardization")
     println("======================================")
+  
 
-    var standardizedDf = cleanedDf
+var standardizedDf = finalReducedDf
+val reducedNumericColumns = finalReducedDf.columns.filter { c =>
+  finalReducedDf.schema(c).dataType.isInstanceOf[
+    org.apache.spark.sql.types.NumericType
+  ]
+}
 
-    numericColumns.foreach { c =>
-      val stats = cleanedDf.select(
+    reducedNumericColumns.foreach { c =>
+      val stats = finalReducedDf.select(
         avg(col(s"`$c`")).alias("mean"),
         stddev(col(s"`$c`")).alias("stddev")
       ).first()
