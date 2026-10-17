@@ -155,7 +155,7 @@ object RDDOperations {
     // ======================================================================
     // Task 3 - Join with the attack_family reference table
     // Why: re-uses the Phase 2 reference table to move from 12 classes to
-    // 6 attack families, which is the level the report discusses.
+    // 5 attack families, which is the level the report discusses.
     // ======================================================================
     header("3. Family-level statistics (join + reduceByKey)")
 
