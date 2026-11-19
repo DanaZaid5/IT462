@@ -135,7 +135,7 @@ object MachineLearning {
 
     val hashCols = (safeNames.toSeq ++ catCols.toSeq ++ Seq("label")).map(c => col(c))
     val ranked = data
-      .withColumn("_h", xxhash64(hashCols: _*))
+      .withColumn("_h", xxhash64((lit(Seed) +: hashCols): _*))
       .withColumn("_rn", row_number().over(Window.partitionBy("label").orderBy("_h")))
       .withColumn("_cnt", count(lit(1)).over(Window.partitionBy("label")))
       .cache()
@@ -348,7 +348,7 @@ object MachineLearning {
       out(f"${labelNames(l)}%-28s $n%7d ${mP.precision(l)}%7.4f ${mP.recall(l)}%7.4f ${mP.fMeasure(l)}%7.4f")
       perClassLines += s"${labelNames(l)},$n,${mP.precision(l)},${mP.recall(l)},${mP.fMeasure(l)}"
     }
-    writeFile("results/ml_per_class_metrics.csv", perClassLines)
+    writeFile("results/ml_per_class_metrics.csv", perClassLines.toList)
 
     // ---- Confusion matrix --------------------------------------------------
     header("7. Confusion matrix - " + primaryName + " (rows = actual, columns = predicted)")
@@ -436,7 +436,7 @@ object MachineLearning {
       out(f"${r.getString(0)}%-28s ${r.getLong(1)}%7d ${100.0 * r.getDouble(2)}%7.1f ${accU}%11.4f ${r.getLong(3)}%9d")
       seenLines += s"${r.getString(0)},${r.getLong(1)},${r.getDouble(2)},${r.getLong(3)},$accU"
     }
-    writeFile("results/ml_seen_vs_unseen_shapes.csv", seenLines)
+    writeFile("results/ml_seen_vs_unseen_shapes.csv", seenLines.toList)
 
     // ======================================================================
     // 12. Save models and the text log
