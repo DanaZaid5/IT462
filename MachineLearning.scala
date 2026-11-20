@@ -101,7 +101,6 @@ object MachineLearning {
     val selectExprs =
       Seq(col("label").cast("double").alias("label"),
           col("Attack_type"),
-          col("traffic_class"),
           col("is_attack").cast("double").alias("is_attack")) ++
       catCols.map(c => col(s"`$c`")) ++
       numCols.zip(safeNames).map { case (o, s) => col(s"`$o`").cast("double").alias(s) }
@@ -121,7 +120,7 @@ object MachineLearning {
     val numClasses = allLabels.length
 
     val normalLabels: Array[Double] =
-      data.filter(col("traffic_class") === "Normal").select("label").distinct()
+      data.filter(col("is_attack") === 0.0).select("label").distinct()
         .collect().map(_.getDouble(0)).sorted
     out("Classes: " + numClasses + "  (normal classes: " +
         normalLabels.map(l => labelNames(l)).mkString(", ") + ")")

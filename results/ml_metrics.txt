@@ -1,0 +1,184 @@
+======================================================================
+0. Load the preprocessed dataset and build the feature list
+======================================================================
+Rows:                  117922
+Numeric input columns: 71
+Categorical inputs:    proto, service, orig_port_type, resp_port_type
+Excluded (derived from the target): Attack_type, attack_family, is_attack, label, traffic_class
+Classes: 12  (normal classes: Thing_Speak, MQTT_Publish, Wipro_bulb)
+======================================================================
+1. Stratified train / test split (70/30, seed 42)
+======================================================================
+Training rows: 82545 (70.0%)   Test rows: 35377 (30.0%)
+class                           train     test   test %
+DOS_SYN_Hping                   63062    27027     30.0
+Thing_Speak                      5358     2296     30.0
+ARP_poisioning                   5338     2287     30.0
+MQTT_Publish                     2899     1243     30.0
+NMAP_UDP_SCAN                    1809      775     30.0
+NMAP_XMAS_TREE_SCAN              1407      603     30.0
+NMAP_OS_DETECTION                1400      600     30.0
+NMAP_TCP_scan                     701      301     30.0
+DDOS_Slowloris                    373      160     30.0
+Wipro_bulb                        153       66     30.1
+Metasploit_Brute_Force_SSH         25       11     30.6
+NMAP_FIN_SCAN                      20        8     28.6
+======================================================================
+2. Feature preparation (fitted on the training split only)
+======================================================================
+Feature vector length: 94 (71 numeric + 23 one-hot slots)
+======================================================================
+3. Training and evaluation
+======================================================================
+Baseline: always predict 'DOS_SYN_Hping'
+  done: Majority-class baseline    test accuracy = 0.7640   macro-F1 = 0.0722   (fit 0.0 s)
+  done: Logistic Regression (w)    test accuracy = 0.9927   macro-F1 = 0.8641   (fit 15.8 s)
+  done: Decision Tree (w)          test accuracy = 0.9854   macro-F1 = 0.8608   (fit 2.2 s)
+  done: Random Forest (unweighted) test accuracy = 0.9910   macro-F1 = 0.9271   (fit 10.2 s)
+  done: Random Forest (w)          test accuracy = 0.9909   macro-F1 = 0.9180   (fit 10.0 s)
+======================================================================
+4. Model comparison - multiclass (12 classes)
+======================================================================
+model                         tr.acc  tr.wF1 |     acc  w.prec   w.rec    w.F1  macroF1
+Majority-class baseline       0.7640  0.6617 |  0.7640  0.5837  0.7640  0.6617   0.0722
+Logistic Regression (w)       0.9927  0.9936 |  0.9927  0.9942  0.9927  0.9932   0.8641
+Decision Tree (w)             0.9902  0.9918 |  0.9854  0.9891  0.9854  0.9863   0.8608
+Random Forest (unweighted)    0.9980  0.9980 |  0.9910  0.9926  0.9910  0.9913   0.9271
+Random Forest (w)             0.9974  0.9975 |  0.9909  0.9922  0.9909  0.9911   0.9180
+======================================================================
+5. Model comparison - binary view (attack = positive class)
+======================================================================
+model                           prec  recall      F1  falseAl    miss  AUC-ROC   AUC-PR
+Majority-class baseline       0.8981  1.0000  0.9463   1.0000  0.0000      n/a      n/a
+Logistic Regression (w)       0.9979  0.9975  0.9977   0.0183  0.0025   0.9994   0.9999
+Decision Tree (w)             0.9988  0.9900  0.9944   0.0105  0.0100   0.9944   0.9994
+Random Forest (unweighted)    0.9986  0.9995  0.9991   0.0119  0.0005   0.9999   1.0000
+Random Forest (w)             0.9987  0.9995  0.9991   0.0111  0.0005   0.9999   1.0000
+falseAl = normal flows flagged as attacks; miss = attack flows classified as normal
+======================================================================
+6. Per-class results - Random Forest (w) (test split)
+======================================================================
+class                         test n    prec  recall      F1
+DOS_SYN_Hping                  27027  1.0000  1.0000  1.0000
+Thing_Speak                     2296  0.9912  0.9817  0.9864
+ARP_poisioning                  2287  0.9813  0.8937  0.9355
+MQTT_Publish                    1243  0.9992  0.9960  0.9976
+NMAP_UDP_SCAN                    775  0.7680  0.9781  0.8604
+NMAP_XMAS_TREE_SCAN              603  1.0000  0.9967  0.9983
+NMAP_OS_DETECTION                600  1.0000  1.0000  1.0000
+NMAP_TCP_scan                    301  1.0000  1.0000  1.0000
+DDOS_Slowloris                   160  0.8626  0.9813  0.9181
+Wipro_bulb                        66  0.9118  0.9394  0.9254
+Metasploit_Brute_Force_SSH        11  0.7273  0.7273  0.7273
+NMAP_FIN_SCAN                      8  1.0000  0.5000  0.6667
+======================================================================
+7. Confusion matrix - Random Forest (w) (rows = actual, columns = predicted)
+======================================================================
+Legend: 0=DOS_SYN_Hping, 1=Thing_Speak, 2=ARP_poisioning, 3=MQTT_Publish, 4=NMAP_UDP_SCAN, 5=NMAP_XMAS_TREE_SCAN, 6=NMAP_OS_DETECTION, 7=NMAP_TCP_scan, 8=DDOS_Slowloris, 9=Wipro_bulb, 10=Metasploit_Brute_Force_SSH, 11=NMAP_FIN_SCAN
+           0      1      2      3      4      5      6      7      8      9     10     11
+    0  27027      0      0      0      0      0      0      0      0      0      0      0
+    1      0   2254     26      0     12      0      0      0      0      4      0      0
+    2      0     13   2044      0    217      0      0      0     11      0      2      0
+    3      0      1      2   1238      0      0      0      0      0      2      0      0
+    4      0      2      1      0    758      0      0      0     14      0      0      0
+    5      0      0      2      0      0    601      0      0      0      0      0      0
+    6      0      0      0      0      0      0    600      0      0      0      0      0
+    7      0      0      0      0      0      0      0    301      0      0      0      0
+    8      0      0      2      0      0      0      0      0    157      0      1      0
+    9      0      3      0      1      0      0      0      0      0     62      0      0
+   10      0      0      3      0      0      0      0      0      0      0      8      0
+   11      0      1      3      0      0      0      0      0      0      0      0      4
+Largest errors (actual -> predicted : flows):
+  ARP_poisioning               -> NMAP_UDP_SCAN                : 217
+  Thing_Speak                  -> ARP_poisioning               : 26
+  NMAP_UDP_SCAN                -> DDOS_Slowloris               : 14
+  ARP_poisioning               -> Thing_Speak                  : 13
+  Thing_Speak                  -> NMAP_UDP_SCAN                : 12
+  ARP_poisioning               -> DDOS_Slowloris               : 11
+  Thing_Speak                  -> Wipro_bulb                   : 4
+  Wipro_bulb                   -> Thing_Speak                  : 3
+  Metasploit_Brute_Force_SSH   -> ARP_poisioning               : 3
+  NMAP_FIN_SCAN                -> ARP_poisioning               : 3
+======================================================================
+8. Feature importance - Random Forest (w)
+======================================================================
+Top 15 individual features:
+  fwd_last_window_size                     0.0430
+  fwd_PSH_flag_count                       0.0419
+  flow_iat.min                             0.0391
+  syn_flag_ratio                           0.0364
+  fwd_init_window_size                     0.0344
+  fwd_URG_flag_count                       0.0343
+  fwd_header_size_min                      0.0336
+  flow_pkts_payload.max                    0.0328
+  fwd_pkts_payload.avg                     0.0297
+  service_ohe_mqtt                         0.0290
+  flow_pkts_payload.avg                    0.0268
+  fwd_pkts_payload.max                     0.0266
+  flow_FIN_flag_count                      0.0255
+  flow_pkts_payload.tot                    0.0254
+  fwd_pkts_payload.min                     0.0227
+Top 10 after summing the one-hot slots of each categorical column:
+  service                                  0.0887
+  fwd_last_window_size                     0.0430
+  fwd_PSH_flag_count                       0.0419
+  flow_iat.min                             0.0391
+  syn_flag_ratio                           0.0364
+  fwd_init_window_size                     0.0344
+  fwd_URG_flag_count                       0.0343
+  fwd_header_size_min                      0.0336
+  flow_pkts_payload.max                    0.0328
+  fwd_pkts_payload.avg                     0.0297
+======================================================================
+9. Decision Tree (w) - features used by the tree
+======================================================================
+  fwd_URG_flag_count                       0.0937
+  service_ohe_mqtt                         0.0937
+  fwd_header_size_min                      0.0905
+  rst_flag_ratio                           0.0905
+  syn_flag_ratio                           0.0901
+  fwd_last_window_size                     0.0881
+  flow_pkts_payload.tot                    0.0849
+  service_ohe_ssh                          0.0704
+  service_ohe_http                         0.0699
+  flow_iat.min                             0.0691
+Tree depth: 12, nodes: 115
+======================================================================
+10. Logistic Regression (w) - mean |coefficient| over the 12 classes (inputs are standardized)
+======================================================================
+  fwd_pkts_payload.min                     0.7558
+  service_ohe_dns                          0.6520
+  flow_pkts_payload.min                    0.6416
+  fwd_header_size_min                      0.6272
+  syn_flag_ratio                           0.5288
+  flow_iat.min                             0.4994
+  payload_bytes_per_second                 0.4845
+  service_ohe_unknown                      0.4632
+  service_ohe_http                         0.4625
+  fwd_pkts_payload.avg                     0.4600
+======================================================================
+11. Test accuracy on seen vs. unseen flow shapes - Random Forest (w)
+======================================================================
+Shape = proto, service, resp_port_type, total_pkts, flow_SYN_flag_count, flow_RST_flag_count, flow_ACK_flag_count
+  shape seen in training: false flows =    154   accuracy = 0.9675
+  shape seen in training: true  flows =  35223   accuracy = 0.9910
+Share of test flows with a training twin, and accuracy on the unseen ones, per class:
+class                         test n  seen %  acc unseen  n unseen
+DOS_SYN_Hping                  27027   100.0         NaN         0
+Thing_Speak                     2296    99.2      0.9474        19
+ARP_poisioning                  2287    95.3      0.9907       107
+MQTT_Publish                    1243    99.8      0.6667         3
+NMAP_UDP_SCAN                    775   100.0         NaN         0
+NMAP_XMAS_TREE_SCAN              603   100.0         NaN         0
+NMAP_OS_DETECTION                600   100.0         NaN         0
+NMAP_TCP_scan                    301   100.0         NaN         0
+DDOS_Slowloris                   160    98.1      1.0000         3
+Wipro_bulb                        66    68.2      0.9524        21
+Metasploit_Brute_Force_SSH        11    90.9      0.0000         1
+NMAP_FIN_SCAN                      8   100.0         NaN         0
+======================================================================
+12. Saving
+======================================================================
+Saved: models/prep_pipeline, models/random_forest
+Saved: results/ml_model_comparison.csv, ml_per_class_metrics.csv, ml_confusion_matrix.csv,
+        ml_feature_importance.csv, ml_seen_vs_unseen_shapes.csv, ml_metrics.txt
